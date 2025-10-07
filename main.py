@@ -22,12 +22,12 @@ pygame.display.set_caption("Jogo de Ação")
 clock = pygame.time.Clock()
 FPS = 60
 
-# Carregando imagens
-player_img = pygame.Surface((50, 50))
-player_img.fill(AZUL)
+# Carregando as imagens
+player_img = pygame.image.load("img/foguete.png")  # Certifique-se de que a imagem está no caminho correto
+player_img = pygame.transform.scale(player_img, (50, 50))  # Redimensionando a imagem se necessário
 
-enemy_img = pygame.Surface((50, 50))
-enemy_img.fill(VERMELHO)
+enemy_img = pygame.image.load("img/ufo.png")
+enemy_img = pygame.transform.scale(enemy_img, (50, 50))  # Redimensionando o inimigo
 
 bullet_img = pygame.Surface((10, 5))
 bullet_img.fill(VERDE)
@@ -35,8 +35,28 @@ bullet_img.fill(VERDE)
 enemy_bullet_img = pygame.Surface((10, 5))
 enemy_bullet_img.fill(VERMELHO)  # Cor do tiro do inimigo
 
-meteoro_img = pygame.Surface((30, 30))
-meteoro_img.fill((150, 150, 150))  # Cor cinza para os meteoros
+meteoro_img = pygame.image.load("img/meteoro.png")
+meteoro_img = pygame.transform.scale(meteoro_img, (30, 30))  # Tamanho do meteoro
+
+# Fundo
+fundo_img = pygame.image.load("img/fundo.png")
+fundo_img = pygame.transform.scale(fundo_img, (LARGURA_TELA, ALTURA_TELA))  # Redimensionando o fundo para preencher a tela
+
+# Carregando imagens
+foguete_img = pygame.Surface((50, 50))
+foguete_img.fill(AZUL)
+
+ufo_img = pygame.Surface((50, 50))
+ufo_img.fill(VERMELHO)
+
+bullet_img = pygame.Surface((10, 5))
+bullet_img.fill(VERDE)
+
+ufo_bullet_img = pygame.Surface((10, 5))
+ufo_bullet_img.fill(VERMELHO)  # Cor do tiro do inimigo
+
+meteoro_png = pygame.Surface((30, 30))
+meteoro_png.fill((150, 150, 150))  # Cor cinza para os meteoros
 
 # Classe do jogador
 class Player:
@@ -44,7 +64,6 @@ class Player:
         self.x = 100
         self.y = ALTURA_TELA // 2
         self.velocidade = 5
-        self.vivo = True
         self.vidas = 3
         self.ultimo_tiro = 0  # Variável para controlar o tempo entre os tiros
 
@@ -84,12 +103,10 @@ class Enemy:
 
     def disparar(self):
         tempo_atual = time.time()
-        # Tiro aleatório com intervalo entre 0.5 a 1.5 segundos
         if tempo_atual - self.ultimo_tiro >= random.uniform(0.5, 1.5):  
             self.ultimo_tiro = tempo_atual
-            # Gerar um tiro aleatório em uma posição vertical aleatória
-            pos_y_tiro = self.y + random.randint(-20, 20)  # Aleatorizar a posição do tiro verticalmente
-            return Bullet(self.x - 10, pos_y_tiro, -15)  # O tiro vai para a esquerda com velocidade maior
+            pos_y_tiro = self.y + random.randint(-20, 20)
+            return Bullet(self.x - 10, pos_y_tiro, -15)
         return None
 
     def desenhar(self):
@@ -98,33 +115,30 @@ class Enemy:
     def mostrar_vida(self):
         font = pygame.font.SysFont("Arial", 20)
         texto = font.render(f'Vida: {self.vida}', True, BRANCO)
-        tela.blit(texto, (self.x, self.y - 30))  # Exibe acima do inimigo
+        tela.blit(texto, (self.x, self.y - 30))  # Exibe a vida acima do inimigo
 
 # Classe do meteoro
 class Meteoro:
     def __init__(self):
-        # Posicionar o meteoro em um canto aleatório da tela
-        self.x = random.choice([0, LARGURA_TELA])  # Inicia em um dos cantos horizontais
-        self.y = random.randint(0, ALTURA_TELA)  # Altura aleatória na tela
-        self.velocidade_x = random.choice([1, -1]) * random.randint(3, 6)  # Direção aleatória (diagonal)
-        self.velocidade_y = random.randint(3, 6)  # Velocidade vertical
+        self.x = LARGURA_TELA  
+        self.y = random.randint(0, ALTURA_TELA - 30)
+        self.velocidade_x = -random.randint(3, 6)
+        self.velocidade_y = random.choice([0, 1, -1])
 
     def mover(self):
-        # Atualiza a posição com base na velocidade
         self.x += self.velocidade_x
         self.y += self.velocidade_y
-        # Garantir que o meteoro não saia da tela
-        if self.x < 0 or self.x > LARGURA_TELA:
-            self.velocidade_x = -self.velocidade_x  # Inverte a direção horizontal
-        if self.y > ALTURA_TELA:
-            self.y = -30  # Reinicia a posição do meteoro no topo
 
     def desenhar(self):
         tela.blit(meteoro_img, (self.x, self.y))
 
     def colisao(self, player):
-        # Verificar se o meteoro colidiu com o jogador
         if player.x < self.x + 30 and player.x + 50 > self.x and player.y < self.y + 30 and player.y + 50 > self.y:
+            return True
+        return False
+
+    def colisao_tiro(self, tiro):
+        if self.x < tiro.x < self.x + 30 and self.y < tiro.y < self.y + 30:
             return True
         return False
 
@@ -142,21 +156,38 @@ class Bullet:
         tela.blit(bullet_img, (self.x, self.y))
 
 # Função para mostrar texto na tela
-def texto(msg, cor, pos_x, pos_y):
-    font = pygame.font.SysFont("Arial", 30)
+def desenhar_texto(msg, cor, pos_x, pos_y, tamanho=30):
+    font = pygame.font.SysFont("Arial", tamanho)
     texto_surface = font.render(msg, True, cor)
     tela.blit(texto_surface, (pos_x, pos_y))
 
-# Função principal
-def jogo():
+# Função para desenhar botões
+def desenhar_botao(texto, x, y, largura, altura, cor_fundo, cor_texto):
+    pygame.draw.rect(tela, cor_fundo, (x, y, largura, altura))
+    desenhar_texto(texto, cor_texto, x + largura // 2 - len(texto) * 10 // 2, y + altura // 3)
+
+# Função para verificar clique no botão
+def verificar_clique_botao(mx, my, x, y, largura, altura):
+    if x < mx < x + largura and y < my < y + altura:
+        return True
+    return False
+
+# Função para reiniciar o estado do jogo
+def reiniciar_jogo():
     player = Player()
     enemy = Enemy()
-    meteoros = [Meteoro() for _ in range(5)]  # Criar 5 meteoros no início
+    meteoros = [Meteoro() for _ in range(8)]  # Agora 8 meteoros, em vez de 5
     tiros = []
     tiros_inimigo = []
+    return player, enemy, meteoros, tiros, tiros_inimigo
+
+# Função principal do jogo
+def jogo():
+    player, enemy, meteoros, tiros, tiros_inimigo = reiniciar_jogo()
     pausado = False
     game_over = False
     vitoria = False
+    estado_jogo = "inicio"  # Estados do jogo: "inicio", "jogo", "game_over"
 
     while True:
         for evento in pygame.event.get():
@@ -164,104 +195,120 @@ def jogo():
                 pygame.quit()
                 quit()
 
+        mx, my = pygame.mouse.get_pos()
         keys = pygame.key.get_pressed()
 
-        if not pausado and not game_over:
-            player.mover(keys)
+        # Pressionar R para reiniciar o jogo
+        if keys[pygame.K_r] and game_over:
+            player, enemy, meteoros, tiros, tiros_inimigo = reiniciar_jogo()
+            game_over = False
+            vitoria = False
 
-            # Tiro do jogador
-            if keys[pygame.K_SPACE] and player.pode_disparar():
-                tiros.append(Bullet(player.x + 50, player.y + 20, 10))  # O tiro vai para a direita
+        if estado_jogo == "inicio":
+            tela.fill(PRETO)
+            desenhar_botao("Iniciar Jogo", LARGURA_TELA // 2 - 100, ALTURA_TELA // 2 - 50, 200, 50, AZUL, BRANCO)
 
-            # Movimento do inimigo
-            enemy.mover()
+            if evento.type == pygame.MOUSEBUTTONDOWN:
+                if verificar_clique_botao(mx, my, LARGURA_TELA // 2 - 100, ALTURA_TELA // 2 - 50, 200, 50):
+                    estado_jogo = "jogo"
 
-            # O inimigo atira (tiros rápidos e aleatórios)
-            tiro_inimigo = enemy.disparar()
-            if tiro_inimigo:
-                tiros_inimigo.append(tiro_inimigo)
+        elif estado_jogo == "jogo":
+            if not pausado and not game_over:
+                player.mover(keys)
 
-            # Movimentar os tiros
-            for tiro in tiros:
-                tiro.mover()
-                if tiro.x > LARGURA_TELA:
-                    tiros.remove(tiro)
+                if keys[pygame.K_SPACE] and player.pode_disparar():
+                    tiros.append(Bullet(player.x + 50, player.y + 20, 10))
 
-            for tiro in tiros_inimigo:
-                tiro.mover()
-                if tiro.x < 0:
-                    tiros_inimigo.remove(tiro)
+                enemy.mover()
 
-            # Colisão entre tiro e inimigo
-            for tiro in tiros:
-                if enemy.x < tiro.x < enemy.x + 50 and enemy.y < tiro.y < enemy.y + 50:
-                    enemy.vida -= 10
-                    tiros.remove(tiro)
-                    if enemy.vida <= 0:
-                        vitoria = True
-                        game_over = True
+                tiro_inimigo = enemy.disparar()
+                if tiro_inimigo:
+                    tiros_inimigo.append(tiro_inimigo)
 
-            # Colisão entre inimigo e jogador
-            if player.x < enemy.x + 50 and player.x + 50 > enemy.x and player.y < enemy.y + 50 and player.y + 50 > enemy.y:
-                player.vidas -= 1
-                if player.vidas <= 0:
-                    game_over = True
+                for tiro in tiros[:]:
+                    tiro.mover()
+                    if tiro.x > LARGURA_TELA:
+                        tiros.remove(tiro)
 
-            # Colisão entre tiro do inimigo e jogador
-            for tiro_inimigo in tiros_inimigo:
-                if player.x < tiro_inimigo.x < player.x + 50 and player.y < tiro_inimigo.y < player.y + 50:
+                for tiro_inimigo in tiros_inimigo[:]:
+                    tiro_inimigo.mover()
+                    if tiro_inimigo.x < 0:
+                        tiros_inimigo.remove(tiro_inimigo)
+
+                for tiro in tiros[:]:
+                    if enemy.x < tiro.x < enemy.x + 50 and enemy.y < tiro.y < enemy.y + 50:
+                        enemy.vida -= 10
+                        tiros.remove(tiro)
+                        if enemy.vida <= 0:
+                            vitoria = True
+                            game_over = True
+
+                for meteoro in meteoros[:]:
+                    for tiro in tiros[:]:
+                        if meteoro.colisao_tiro(tiro):
+                            meteoros.remove(meteoro)
+                            tiros.remove(tiro)
+                            break
+
+                if player.x < enemy.x + 50 and player.x + 50 > enemy.x and player.y < enemy.y + 50 and player.y + 50 > enemy.y:
                     player.vidas -= 1
-                    tiros_inimigo.remove(tiro_inimigo)
                     if player.vidas <= 0:
                         game_over = True
 
-            # Colisão entre meteoros e jogador
+                for tiro_inimigo in tiros_inimigo[:]:
+                    if player.x < tiro_inimigo.x < player.x + 50 and player.y < tiro_inimigo.y < player.y + 50:
+                        player.vidas -= 1
+                        tiros_inimigo.remove(tiro_inimigo)
+                        if player.vidas <= 0:
+                            game_over = True
+
+                for meteoro in meteoros[:]:
+                    meteoro.mover()
+                    if meteoro.x < 0 or meteoro.y < 0 or meteoro.y > ALTURA_TELA:
+                        meteoros.remove(meteoro)
+                        continue
+
+                    if meteoro.colisao(player):
+                        player.vidas -= 1
+                        meteoros.remove(meteoro)
+                        if player.vidas <= 0:
+                            game_over = True
+
+                while len(meteoros) < 8:  # Agora 8 meteoros, em vez de 5
+                    meteoros.append(Meteoro())
+
+            tela.fill(PRETO)
+            player.desenhar()
+            enemy.desenhar()
+            enemy.mostrar_vida()
+
             for meteoro in meteoros:
-                meteoro.mover()
-                if meteoro.colisao(player):
-                    player.vidas -= 1
-                    meteoros.remove(meteoro)
-                    if player.vidas <= 0:
-                        game_over = True
+                meteoro.desenhar()
 
-        # Tela
-        tela.fill(PRETO)
+            for tiro in tiros:
+                tiro.desenhar()
 
-        # Mostrar o personagem
-        player.desenhar()
+            for tiro_inimigo in tiros_inimigo:
+                tela.blit(enemy_bullet_img, (tiro_inimigo.x, tiro_inimigo.y))
 
-        # Mostrar o inimigo
-        enemy.desenhar()
-        enemy.mostrar_vida()
+            desenhar_texto(f'Vidas: {player.vidas}', BRANCO, 10, 10)
 
-        # Mostrar tiros do jogador
-        for tiro in tiros:
-            tiro.desenhar()
+            if game_over:
+                if vitoria:
+                    desenhar_texto("Você Venceu!", BRANCO, LARGURA_TELA // 2 - 80, ALTURA_TELA // 2 - 30, 40)
+                else:
+                    desenhar_texto("Game Over!", BRANCO, LARGURA_TELA // 2 - 100, ALTURA_TELA // 2 - 50, 40)
 
-        # Mostrar tiros do inimigo
-        for tiro_inimigo in tiros_inimigo:
-            tela.blit(enemy_bullet_img, (tiro_inimigo.x, tiro_inimigo.y))
+                desenhar_botao("Reiniciar", LARGURA_TELA // 2 - 100, ALTURA_TELA // 2 + 20, 200, 50, AZUL, BRANCO)
 
-        # Mostrar meteoros
-        for meteoro in meteoros:
-            meteoro.desenhar()
-
-        # Mostrar vidas
-        texto(f'Vidas: {player.vidas}', BRANCO, 10, 10)
-
-        # Pausar jogo
-        if keys[pygame.K_p]:
-            pausado = not pausado
-
-        if game_over:
-            if vitoria:
-                texto("Você Venceu!", VERDE, LARGURA_TELA // 2 - 100, ALTURA_TELA // 2)
-            else:
-                texto("Você Perdeu!", VERMELHO, LARGURA_TELA // 2 - 100, ALTURA_TELA // 2)
+                if evento.type == pygame.MOUSEBUTTONDOWN:
+                    if verificar_clique_botao(mx, my, LARGURA_TELA // 2 - 100, ALTURA_TELA // 2 + 20, 200, 50):
+                        player, enemy, meteoros, tiros, tiros_inimigo = reiniciar_jogo()
+                        game_over = False
+                        vitoria = False
 
         pygame.display.update()
-
         clock.tick(FPS)
 
-# Iniciar o jogo
+# Rodando o jogo
 jogo()
